@@ -1,36 +1,42 @@
 import pygame as pg
 import sys
+from numpy import array
 
 pg.init()
 
 red = (255, 0, 0)
 black = (0, 0, 0)
-screensize = (640, 480)
+screen_width = 500
+cell_width = 5
 
-screen = pg.display.set_mode(screensize)
+screen = pg.display.set_mode((screen_width, screen_width))
 clock = pg.time.Clock()
 
 
 class Player:
     def __init__(self, rect: pg.Rect):
         self.rect = rect
-        self._direction = (0, 0)
+        self._direction = array([0, 0])
+        self.speed = 1
         self.key_dir_map = {
-            pg.K_UP: (0, -1)
-            , pg.K_DOWN: (0, 1)
-            , pg.K_RIGHT: (1, 0)
-            , pg.K_LEFT: (-1, 0)
+            pg.K_UP: array([0, -1])
+            , pg.K_DOWN: array([0, 1])
+            , pg.K_RIGHT: array([1, 0])
+            , pg.K_LEFT: array([-1, 0])
         }
 
     def receive_key(self, key):
         if key in self.key_dir_map:
-            self._direction = self.key_dir_map[key]
+            new_dir = self.key_dir_map[key]
+            if any(new_dir + self._direction):  # ignore direct reversal
+                self._direction = new_dir
 
     def move(self):
-        self.rect = self.rect.move(self._direction)
+        velocity = self._direction * self.speed * cell_width
+        self.rect = self.rect.move(tuple(velocity))
 
 
-player = Player(pg.Rect(320, 200, 5, 5))  # this Rect object stores info about the area the player occupies
+player = Player(pg.Rect(screen_width/2, screen_width/2, cell_width, cell_width))  # this Rect object stores info about the area the player occupies
 
 
 while True:
@@ -47,4 +53,4 @@ while True:
     player.move()
     screen.fill(red, player.rect)
     pg.display.update()
-    clock.tick(120)
+    clock.tick(30)
