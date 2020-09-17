@@ -17,12 +17,22 @@ clock = pg.time.Clock()
 
 
 class Cell:
-    def __init__(self, rect: pg.Rect, is_deadzone=False, draw_color=bg_color):
+    def __init__(self, vector: array, is_deadzone=False, draw_color=bg_color):
+        """
+        a cell in the Grid. A cell can draw itself on the screen.
+
+        :param vector: The location of the cell in the matrix representation of the grid [row, column] where [0,0]
+            is top left and [0, n] is top right.
+        :param is_deadzone: Is the cell a deadzone cell?
+        :param draw_color: RGB tuple that the cell should draw itself with.
+        """
         self.contains_snake = False
         self.contains_food = False
         self.is_deadzone = is_deadzone
         self.draw_color = draw_color
-        self.rect = rect
+        # Note, screen coordinates are (x, y), so we take (column, row) from the vector.
+        self.rect = pg.Rect(vector[1]*cell_width, vector[0]*cell_width, cell_width, cell_width)
+        self.vector = vector
 
     def draw(self):
         screen.fill(self.draw_color, self.rect)
@@ -43,7 +53,7 @@ class Grid:
                     color = bg_color
                 row.append(
                     Cell(
-                        rect=pg.Rect(c*cell_width, r*cell_width, cell_width, cell_width)
+                        vector=array([r, c])
                         , is_deadzone=deadzone
                         , draw_color=color
                     ))
@@ -62,14 +72,16 @@ class Grid:
 
 
 class Player:
-    def __init__(self, rect: pg.Rect):
-        self.rect = rect
+    def __init__(self, grid: Grid):
+        self.grid = grid
+        mid_ix = grid.grid_width // 2
+        self.cell = grid[mid_ix][mid_ix]
         self._direction = array([0, 0])
         self.key_dir_map = {
-            pg.K_UP: array([0, -1])
-            , pg.K_DOWN: array([0, 1])
-            , pg.K_RIGHT: array([1, 0])
-            , pg.K_LEFT: array([-1, 0])
+            pg.K_UP: array([-1, 0])
+            , pg.K_DOWN: array([1, 0])
+            , pg.K_RIGHT: array([0, 1])
+            , pg.K_LEFT: array([0, -1])
         }
 
     def receive_key(self, key):
@@ -79,12 +91,16 @@ class Player:
                 self._direction = new_dir
 
     def move(self):
-        velocity = self._direction * cell_width
-        self.rect = self.rect.move(tuple(velocity))
+        new_r, new_c = self.cell.vector + self._direction
+        new_r, new_c = new_r % self.grid.grid_width, new_c % self.grid.grid_width  # wrap screen if travelling off grid
+        new_cell = self.grid[new_r][new_c]
+        self.cell.draw()  # restore old cell to its former color
+        self.cell = new_cell
+        screen.fill(snake_color, self.cell.rect)  # fill new cell with snake color
 
 
-player = Player(pg.Rect(screen_width / 2, screen_width / 2, cell_width, cell_width))
 grid = Grid()
+player = Player(grid)
 
 while True:
     for event in pg.event.get():
@@ -95,8 +111,6 @@ while True:
                 sys.exit()
             else:
                 player.receive_key(event.key)
-    screen.fill(bg_color, player.rect)
     player.move()
-    screen.fill(snake_color, player.rect)
     pg.display.update()
     clock.tick(30)
