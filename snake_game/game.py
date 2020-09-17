@@ -79,13 +79,16 @@ class Grid:
 
 
 class Snake:
-    def __init__(self, grid: Grid, start_len=5):
+    def __init__(self, grid: Grid, start_len=20):
         self.grid = grid
         self.start_len = start_len
         # find initial cell in grid
         mid_ix = grid.grid_width // 2
         start_cell = grid[mid_ix][mid_ix]
+        start_cell.contains_snake = True
         self.body = deque([start_cell])
+        self.alive = True
+        self.in_motion = False
 
         self._direction = array([0, 0])
         self.key_dir_map = {
@@ -100,23 +103,30 @@ class Snake:
             new_dir = self.key_dir_map[key]
             if any(new_dir + self._direction):  # ignore direct reversal
                 self._direction = new_dir
+                self.in_motion = True
 
     def move(self):
-        # determine next cell in grid based on direction
-        new_r, new_c = self.head.vector + self._direction
-        new_r, new_c = new_r % self.grid.grid_width, new_c % self.grid.grid_width  # wrap screen if travelling off grid
-        new_cell = self.grid[new_r][new_c]
-        if new_cell.contains_food:
-            self.eat_food(new_cell)
-        elif len(self.body) >= self.start_len:
-            self.body.popleft().draw()  # restore old tail cell to its former color
-        self.body.append(new_cell)
+        if self.in_motion:
+            # determine next cell in grid based on direction
+            new_r, new_c = self.head.vector + self._direction
+            new_r, new_c = new_r % self.grid.grid_width, new_c % self.grid.grid_width  # wrap screen if travelling off grid
+            new_cell = self.grid[new_r][new_c]
+            if new_cell.contains_snake or new_cell.is_deadzone:
+                self.alive = False
+            elif new_cell.contains_food:
+                self.eat_food(new_cell)
+            elif len(self.body) >= self.start_len and not new_cell.contains_food:
+                old_tail = self.body.popleft()
+                old_tail.contains_snake = False
+                old_tail.draw()  # pop former tail cell from body and restore its former color
+            self.body.append(new_cell)
+            new_cell.contains_snake = True
         screen.fill(snake_color, self.head.rect)  # fill new cell with snake color
+        # print("snake length:", len(self.body))
 
     def eat_food(self, food_cell: Cell):
         food_cell.contains_food = False
         self.grid.place_food()
-
 
     @property
     def head(self):
@@ -127,7 +137,7 @@ grid = Grid()
 snake = Snake(grid)
 grid.place_food()
 
-while True:
+while snake.alive:
     for event in pg.event.get():
         if event.type == pg.QUIT:
             sys.exit()
@@ -135,7 +145,11 @@ while True:
             if event.key == pg.K_ESCAPE:
                 sys.exit()
             else:
+                # todo: decide if it is best to process the first or last command?
+                #  Or allow them to remain in the event queue?
+                #  It's frustrating to feel the snake ignored your commands!
                 snake.receive_key(event.key)
+                break  # don't direct the snake more than once per cycle
     snake.move()
     pg.display.update()
     clock.tick(30)
