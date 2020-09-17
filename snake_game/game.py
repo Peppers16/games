@@ -2,12 +2,14 @@ import pygame as pg
 import sys
 from numpy import array
 from collections import deque
+from random import choice
 
 pg.init()
 
 snake_color = (255, 0, 0)
 bg_color = (0, 0, 0)
 deadzone_color = (0, 255, 0)
+food_color = (0, 0, 255)
 
 screen_width = 500
 cell_width = 5
@@ -70,12 +72,17 @@ class Grid:
     def __iter__(self):
         return (c for r in self.grid for c in r)
 
+    def place_food(self):
+        food_cell = choice([cell for cell in grid if not cell.is_deadzone and not cell.contains_snake])
+        food_cell.contains_food = True
+        screen.fill(food_color, food_cell.rect)
 
-class Player:
+
+class Snake:
     def __init__(self, grid: Grid, start_len=5):
         self.grid = grid
         self.start_len = start_len
-
+        # find initial cell in grid
         mid_ix = grid.grid_width // 2
         start_cell = grid[mid_ix][mid_ix]
         self.body = deque([start_cell])
@@ -95,13 +102,21 @@ class Player:
                 self._direction = new_dir
 
     def move(self):
+        # determine next cell in grid based on direction
         new_r, new_c = self.head.vector + self._direction
         new_r, new_c = new_r % self.grid.grid_width, new_c % self.grid.grid_width  # wrap screen if travelling off grid
         new_cell = self.grid[new_r][new_c]
-        if len(self.body) >= self.start_len:
+        if new_cell.contains_food:
+            self.eat_food(new_cell)
+        elif len(self.body) >= self.start_len:
             self.body.popleft().draw()  # restore old tail cell to its former color
         self.body.append(new_cell)
         screen.fill(snake_color, self.head.rect)  # fill new cell with snake color
+
+    def eat_food(self, food_cell: Cell):
+        food_cell.contains_food = False
+        self.grid.place_food()
+
 
     @property
     def head(self):
@@ -109,7 +124,8 @@ class Player:
 
 
 grid = Grid()
-player = Player(grid)
+snake = Snake(grid)
+grid.place_food()
 
 while True:
     for event in pg.event.get():
@@ -119,7 +135,7 @@ while True:
             if event.key == pg.K_ESCAPE:
                 sys.exit()
             else:
-                player.receive_key(event.key)
-    player.move()
+                snake.receive_key(event.key)
+    snake.move()
     pg.display.update()
     clock.tick(30)
