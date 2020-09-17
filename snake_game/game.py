@@ -72,10 +72,14 @@ class Grid:
 
 
 class Player:
-    def __init__(self, grid: Grid):
+    def __init__(self, grid: Grid, start_len=5):
         self.grid = grid
+        self.start_len = start_len
+
         mid_ix = grid.grid_width // 2
-        self.cell = grid[mid_ix][mid_ix]
+        start_cell = grid[mid_ix][mid_ix]
+        self.body = deque([start_cell])
+
         self._direction = array([0, 0])
         self.key_dir_map = {
             pg.K_UP: array([-1, 0])
@@ -91,12 +95,17 @@ class Player:
                 self._direction = new_dir
 
     def move(self):
-        new_r, new_c = self.cell.vector + self._direction
+        new_r, new_c = self.head.vector + self._direction
         new_r, new_c = new_r % self.grid.grid_width, new_c % self.grid.grid_width  # wrap screen if travelling off grid
         new_cell = self.grid[new_r][new_c]
-        self.cell.draw()  # restore old cell to its former color
-        self.cell = new_cell
-        screen.fill(snake_color, self.cell.rect)  # fill new cell with snake color
+        if len(self.body) >= self.start_len:
+            self.body.popleft().draw()  # restore old tail cell to its former color
+        self.body.append(new_cell)
+        screen.fill(snake_color, self.head.rect)  # fill new cell with snake color
+
+    @property
+    def head(self):
+        return self.body[-1]
 
 
 grid = Grid()
