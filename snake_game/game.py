@@ -136,20 +136,21 @@ class Snake:
 grid = Grid()
 snake = Snake(grid)
 grid.place_food()
+pg.event.set_blocked(pg.MOUSEMOTION)  # else waving the mouse can make the snake lag by filling event queue
 
+# this loop is designed to avoid 'ignoring' player directions if two are given in one game cycle.
 while snake.alive:
-    for event in pg.event.get():
+    event = pg.event.poll()  # check one event, leave other events on the queue
+    while event.type != pg.NOEVENT:
         if event.type == pg.QUIT:
             sys.exit()
         elif event.type == pg.KEYDOWN:
             if event.key == pg.K_ESCAPE:
                 sys.exit()
             else:
-                # todo: decide if it is best to process the first or last command?
-                #  Or allow them to remain in the event queue?
-                #  It's frustrating to feel the snake ignored your commands!
                 snake.receive_key(event.key)
-                break  # don't direct the snake more than once per cycle
+                break  # advance game cycle before polling event queue further
+        event = pg.event.poll()  # keep polling event queue until empty or player directs snake
     snake.move()
     pg.display.update()
     clock.tick(30)
