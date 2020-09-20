@@ -6,13 +6,13 @@ from random import choice
 
 pg.init()
 
-snake_color = (255, 0, 0)
+snake_color = (0, 255, 0)
 bg_color = (0, 0, 0)
-deadzone_color = (0, 255, 0)
+deadzone_color = (255, 0, 0)
 food_color = (0, 0, 255)
 
-screen_width = 500
-cell_width = 5
+screen_width = 600
+cell_width = 10
 
 screen = pg.display.set_mode((screen_width, screen_width))
 clock = pg.time.Clock()
@@ -109,9 +109,12 @@ class Snake:
         if self.in_motion:
             # determine next cell in grid based on direction
             new_r, new_c = self.head.vector + self._direction
-            new_r, new_c = new_r % self.grid.grid_width, new_c % self.grid.grid_width  # wrap screen if travelling off grid
+            new_r, new_c = new_r % self.grid.grid_width, new_c % self.grid.grid_width  # wrap screen if travelling off-grid
             new_cell = self.grid[new_r][new_c]
-            if new_cell.contains_snake or new_cell.is_deadzone:
+            if new_cell.contains_snake:
+                if new_cell != self.body[0] and len(self.body) >= self.start_len:  # tail is exempt: it's about to leave this cell
+                    self.alive = False
+            if new_cell.is_deadzone:
                 self.alive = False
             elif new_cell.contains_food:
                 self.eat_food(new_cell)
