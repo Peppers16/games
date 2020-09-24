@@ -2,7 +2,7 @@ import pygame as pg
 import sys
 from numpy import array
 from collections import deque
-from random import choice
+from random import shuffle
 
 pg.init()
 
@@ -11,135 +11,105 @@ bg_color = (0, 0, 0)
 deadzone_color = (255, 0, 0)
 food_color = (0, 0, 255)
 
-screen_width = 600
-cell_width = 10
-
+screen_width = 500
+block_width = 10
 screen = pg.display.set_mode((screen_width, screen_width))
 clock = pg.time.Clock()
 
 
-class Cell:
-    def __init__(self, vector: array, is_deadzone=False, draw_color=bg_color):
-        """
-        a cell in the Grid. A cell can draw itself on the screen.
-
-        :param vector: The location of the cell in the matrix representation of the grid [row, column] where [0,0]
-            is top left and [0, n] is top right.
-        :param is_deadzone: Is the cell a deadzone cell?
-        :param draw_color: RGB tuple that the cell should draw itself with.
-        """
-        self.contains_snake = False
-        self.contains_food = False
-        self.is_deadzone = is_deadzone
-        self.draw_color = draw_color
-        # Note, screen coordinates are (x, y), so we take (column, row) from the vector.
-        self.rect = pg.Rect(vector[1]*cell_width, vector[0]*cell_width, cell_width, cell_width)
-        self.vector = vector
-
-    def draw(self):
-        screen.fill(self.draw_color, self.rect)
-
-
-class Grid:
-    def __init__(self):
-        self.grid = []
-        self.grid_width = screen_width // cell_width
-        for r in range(self.grid_width):
-            row = []
-            for c in range(self.grid_width):
-                if r in [0, self.grid_width - 1] or c in [0, self.grid_width - 1]:
-                    deadzone = True
-                    color = deadzone_color
-                else:
-                    deadzone = False
-                    color = bg_color
-                row.append(
-                    Cell(
-                        vector=array([r, c])
-                        , is_deadzone=deadzone
-                        , draw_color=color
-                    ))
-            self.grid.append(row)
-        self._draw_screen()
-
-    def _draw_screen(self):
-        for cell in self:
-            cell.draw()
-
-    def __getitem__(self, item):
-        return self.grid[item]
-
-    def __iter__(self):
-        return (c for r in self.grid for c in r)
-
-    def place_food(self):
-        food_cell = choice([cell for cell in grid if not cell.is_deadzone and not cell.contains_snake])
-        food_cell.contains_food = True
-        screen.fill(food_color, food_cell.rect)
-
-
 class Snake:
-    def __init__(self, grid: Grid, start_len=20):
-        self.grid = grid
-        self.start_len = start_len
-        # find initial cell in grid
-        mid_ix = grid.grid_width // 2
-        start_cell = grid[mid_ix][mid_ix]
-        start_cell.contains_snake = True
-        self.body = deque([start_cell])
+    def __init__(self, start_len: int = 3):
+        mid = screen_width // 2
+        start_head = pg.Rect(mid, mid, block_width, block_width)
+        self.body = deque([start_head])
         self.alive = True
         self.in_motion = False
-
+        self.body_len = start_len
+        self.board = Board(self)
         self._direction = array([0, 0])
         self.key_dir_map = {
-            pg.K_UP: array([-1, 0])
-            , pg.K_DOWN: array([1, 0])
-            , pg.K_RIGHT: array([0, 1])
-            , pg.K_LEFT: array([0, -1])
+            pg.K_UP: array([0, -1])
+            , pg.K_DOWN: array([0, 1])
+            , pg.K_RIGHT: array([1, 0])
+            , pg.K_LEFT: array([-1, 0])
         }
 
     def receive_key(self, key):
         if key in self.key_dir_map:
-            new_dir = self.key_dir_map[key]
+            new_dir = self.key_dir_map[key]*block_width
             if any(new_dir + self._direction):  # ignore direct reversal
                 self._direction = new_dir
                 self.in_motion = True
 
     def move(self):
         if self.in_motion:
-            # determine next cell in grid based on direction
-            new_r, new_c = self.head.vector + self._direction
-            new_r, new_c = new_r % self.grid.grid_width, new_c % self.grid.grid_width  # wrap screen if travelling off-grid
-            new_cell = self.grid[new_r][new_c]
-            if new_cell.contains_snake:
-                if new_cell != self.body[0] and len(self.body) >= self.start_len:  # tail is exempt: it's about to leave this cell
-                    self.alive = False
-            if new_cell.is_deadzone:
-                self.alive = False
-            elif new_cell.contains_food:
-                self.eat_food(new_cell)
-            elif len(self.body) >= self.start_len and not new_cell.contains_food:
-                old_tail = self.body.popleft()
-                old_tail.contains_snake = False
-                old_tail.draw()  # pop former tail cell from body and restore its former color
-            self.body.append(new_cell)
-            new_cell.contains_snake = True
-        screen.fill(snake_color, self.head.rect)  # fill new cell with snake color
-        # print("snake length:", len(self.body))
+            new_head = self.head.move(self._direction)
+            new_head.x = new_head.x % screen_width
+            new_head.y = new_head.y % screen_width
+            self.body.append(new_head)
+        if self.board.try_eating(self.head):
+            print('yum')
+            self.body_len += 1
+            print(len(self.body))
+        # TODO: Currently snake ignores food which it eats whilst it is growing to start_len
+        elif len(self.body) > self.body_len:
+            old_tail = self.body.popleft()
+            screen.fill(bg_color, old_tail)
+        screen.fill(snake_color, self.head)  # fill new cell with snake color
+        if self.collides_with(self.head):
+            self.alive = False
 
-    def eat_food(self, food_cell: Cell):
-        food_cell.contains_food = False
-        self.grid.place_food()
+    def collides_with(self, rect: pg.Rect):
+        i = rect.collidelist(self.body)
+        if -1 < i < len(self.body) - 1:
+            return True
+        return False
 
     @property
     def head(self):
         return self.body[-1]
 
 
-grid = Grid()
-snake = Snake(grid)
-grid.place_food()
-pg.event.set_blocked(pg.MOUSEMOTION)  # else waving the mouse can make the snake lag by filling event queue
+class Board:
+    def __init__(self, snake: Snake):
+        self.snake = snake
+        self.food = []
+        n_blocks = screen_width // block_width
+        self.grid = [(i, j) for j in range(n_blocks) for i in range(n_blocks)]
+        self.place_food()
+
+    def place_food(self):
+        """
+        Place food at a random location on the grid. Method shuffles the grid and iterates through it until it finds an
+        unoccupied location: this will help in late game when there are few available locations.
+        :return:
+        """
+        shuffle(self.grid)
+        for i, j in self.grid:
+            try_rect = pg.Rect(i*block_width, j*block_width, block_width, block_width)
+            if self.snake.collides_with(try_rect):
+                continue
+            else:
+                self.food.append(try_rect)
+                screen.fill(food_color, try_rect)
+                return
+
+    def try_eating(self, rect: pg.Rect):
+        """
+        Given a Rect, eat food if present and return True. Otherwise, return False.
+        :param rect:
+        :return:
+        """
+        i = rect.collidelist(self.food)
+        if -1 < i:
+            self.food.pop(i)
+            self.place_food()
+            return True
+        return False
+
+
+snake = Snake()
+pg.event.set_blocked(pg.MOUSEMOTION)
 
 # this loop is designed to avoid 'ignoring' player directions if two are given in one game cycle.
 while snake.alive:
